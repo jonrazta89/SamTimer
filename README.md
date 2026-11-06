@@ -24,7 +24,7 @@ One-tap Android root for Samsung Galaxy devices, built around the
 | su authorization | KernelSU-Next manager (`com.rifsxd.ksunext`), domain `u:r:ksu:s0` |
 | Root lifetime | Per-boot (ephemeral — cleared on reboot) |
 
-Tested on **SM-S921N** (e1s, Exynos 2400), kernel
+Tested on **SM-S921N** (e1s, Exynos 2400), kernel `6.1.162-android14-11`, OneUI 9.<br>**SM-S948U** (S26 Ultra, Exynos 2400/2500), kernel `6.1.x-Samsung-SEC` - offsets ported from vmlinux.elf analysis.
 `6.1.162-android14-11`, OneUI 9.
 
 ## Features
