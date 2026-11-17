@@ -8,6 +8,8 @@ One-tap Android root for Samsung Galaxy devices, built around the
 > (real-cred zero-write / fake-cred ksud late-load chains) is what
 > `app/src/main/cpp/timer.c` evolved from.
 
+**Port target:** Samsung Galaxy S26 Ultra (**SM-S948U**), firmware **S948USQS6BZK4** (AP: `AP_S948USQS6BZK4_S948USQS6BZK4_MQB117038647_REV00_user_low_ship_MULTI_CERT_meta_OS17.tar.md5`), kernel `6.12.69-android16-6-p342046c-abogkiS948USQS6BZK4-4k` (One UI / Android 16).
+
 > [!WARNING]
 > For devices you own or are explicitly authorized to test. The exploit is a
 > probabilistic kernel UAF — a failed run can leave the system unstable until
@@ -19,13 +21,15 @@ One-tap Android root for Samsung Galaxy devices, built around the
 | | |
 | --- | --- |
 | Exploit | CVE-2026-98260 (timer.c payload, built by Gradle) |
-| Root module | KernelSU-Next 3.4.2 (`ksud-next-generic-kdp`, android14-6.1 no-patch-text) |
+| Target device | Samsung Galaxy S26 Ultra **SM-S948U** (Snapdragon 8 Elite for Galaxy / SM8750 family), build **S948USQS6BZK4** |
+| Kernel | `6.12.69-android16-6-p342046c-abogkiS948USQS6BZK4-4k` (Android 16 / One UI, 4K pages) |
+| Root module | KernelSU-Next late-load `ksud` (prebuilt `app/src/main/jniLibs/arm64-v8a/libksud.so`) — must match this kernel/KMI and Samsung KDP/RKP/DEFEX constraints |
 | Execution context | Shizuku shell (uid 2000) |
 | su authorization | KernelSU-Next manager (`com.rifsxd.ksunext`), domain `u:r:ksu:s0` |
 | Root lifetime | Per-boot (ephemeral — cleared on reboot) |
 
-Tested on **SM-S921N** (e1s, Exynos 2400), kernel
-`6.1.162-android14-11`, OneUI 9.
+> [!NOTE]
+> This port updates device/kernel-specific offsets and metadata for SM-S948U S948USQS6BZK4 based on the provided AP firmware image. Kernel offsets in `app/src/main/cpp/offsets.h` include values confirmed from the extracted vmlinux and values that still require on-device runtime/trace validation (see comments in that file). The bundled `libksud.so` must be a compatible build for **android16-6.12** on this device; replace it with the correct per-target payload if needed.
 
 ## Features
 
@@ -87,8 +91,7 @@ Tested on **SM-S921N** (e1s, Exynos 2400), kernel
 2. The root worker adopts `u:r:init:s0`, binds `ksud` over `/system/bin/logcat`
    inside a private mount namespace (KDP-safe exec) and runs
    `late-load --package-name com.rifsxd.ksunext`
-3. KernelSU-Next loads (no-patch-text build — live text patching panics on
-   Exynos 2400), SELinux is restored to enforcing by ksud
+3. KernelSU-Next loads via late-load (use a module/`ksud` build appropriate for this kernel and Samsung hardening; avoid live text patching where unsupported), SELinux is restored to enforcing by ksud
 4. Success is verified through the KSU driver's `reboot()` backdoor ioctl
 5. Failed-plant zombies are made reap-safe first — their posix-cpu-timer
    queue leftmost pointers are zeroed through the write primitive, so
@@ -108,7 +111,7 @@ Tested on **SM-S921N** (e1s, Exynos 2400), kernel
   shape, `.ksud-stage` staging, manager pairing)
 - [BuSung-dev/Root-My-Galaxy-Payloads](https://github.com/BuSung-dev/Root-My-Galaxy-Payloads) —
   per-target `ksud`/`kernelsu.ko` pairs and the Samsung KDP/RKP/DEFEX port
-  methodology (exact-release vermagic, no-patch-text for Exynos)
+  methodology (exact-release vermagic, no-patch-text where required)
 - [rushiranpise/Root-My-Galaxy-Payloads](https://github.com/rushiranpise/Root-My-Galaxy-Payloads) —
   Samsung delta patches for KernelSU 3.2.5–3.4.2, KernelSU-Next and
   ReSukiSU; `ksud-next-generic-kdp` (KernelSU-Next 3.4.2) used here

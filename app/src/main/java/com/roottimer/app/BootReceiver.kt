@@ -28,6 +28,8 @@ import java.util.concurrent.TimeUnit
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        LogSaver.init(context.applicationContext ?: context)
+        LogSaver.i("BOOT_COMPLETED received")
         val prefs = context.getSharedPreferences(Prefs.NAME, Context.MODE_PRIVATE)
         // Always record the boot-completed moment (within a few seconds of
         // sys.boot_completed): MainActivity holds manual runs inside the
@@ -35,7 +37,10 @@ class BootReceiver : BroadcastReceiver() {
         prefs.edit()
             .putLong(Prefs.BOOT_AT_ELAPSED, SystemClock.elapsedRealtime())
             .apply()
-        if (!prefs.getBoolean(Prefs.AUTO_ROOT, false)) return
+        if (!prefs.getBoolean(Prefs.AUTO_ROOT, false)) {
+            LogSaver.i("Auto-root disabled; not scheduling chain")
+            return
+        }
 
         // A soft reboot (SystemServer restart) re-delivers BOOT_COMPLETED
         // while the kernel -- and the live kernelsu module -- is untouched.
@@ -51,6 +56,7 @@ class BootReceiver : BroadcastReceiver() {
             false
         }
         if (alreadyRooted) {
+            LogSaver.i("Already rooted at boot; skipping auto-root chain")
             AutoRootNotif.post(
                 context, 1,
                 context.getString(R.string.notif_already),
@@ -60,6 +66,7 @@ class BootReceiver : BroadcastReceiver() {
             return
         }
 
+        LogSaver.i("Scheduling auto-root chain (180s settle delay)")
         val wait = OneTimeWorkRequestBuilder<ShizukuWaitWorker>()
             .setInitialDelay(180, TimeUnit.SECONDS)
             .build()

@@ -132,6 +132,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        LogSaver.init(applicationContext)
         enableEdgeToEdge()
         autoRoot = getSharedPreferences(Prefs.NAME, MODE_PRIVATE)
             .getBoolean(Prefs.AUTO_ROOT, false)
@@ -140,6 +141,8 @@ class MainActivity : ComponentActivity() {
         rootLabel = getString(R.string.root_checking)
         shizukuLabel = getString(R.string.shizuku_checking)
         runLabel = getString(R.string.run_root)
+        requestAllFilesAccessIfNeeded()
+        appendLog("Log saving: ${LogSaver.logPathHint()}/SamTimer.log (fallback: app files/logs if unavailable)")
 
         Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
         Shizuku.addBinderDeadListener(binderDeadListener)
@@ -323,6 +326,32 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun requestAllFilesAccessIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                if (!android.os.Environment.isExternalStorageManager()) {
+                    val intent = android.content.Intent(
+                        android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                        android.net.Uri.parse("package:$packageName")
+                    )
+                    startActivity(intent)
+                }
+            } catch (_: Exception) {
+                try {
+                    val intent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                    startActivity(intent)
+                } catch (_: Exception) {
+                }
+            }
+        } else {
+            if (checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                requestPermissions(arrayOf(android.Manifest.permission.WRITE_EXTERNAL_STORAGE), REQ_STORAGE)
+            }
+        }
+    }
+
     private fun startRun() {
         val remain = bootSettleRemainingMs()
         if (remain > 0) {
@@ -441,6 +470,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun appendLog(line: String) {
+        LogSaver.i(line)
         if (logs.size > 4000) return // hard cap
         logs.add(line)
     }
@@ -453,6 +483,7 @@ class MainActivity : ComponentActivity() {
     companion object {
         private const val REQ_PERM = 101
         private const val REQ_NOTIF = 102
+        private const val REQ_STORAGE = 103
         /** Auto-root and manual runs both hold this long after boot_completed. */
         private const val BOOT_SETTLE_MS = 180_000L
     }

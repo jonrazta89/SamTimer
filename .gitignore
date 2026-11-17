@@ -44,3 +44,9 @@ build_release.log
 
 # 规划/分析文档（按需求不纳入版本库）
 docs/
+
+# 本地固件/NDK/分析产物（体积大，不纳入版本库）
+NEED/
+
+# 由 Gradle buildPayload 生成的 exploit payload
+app/src/main/jniLibs/arm64-v8a/libtimer.so

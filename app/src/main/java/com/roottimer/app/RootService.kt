@@ -25,6 +25,11 @@ class RootService(private val context: Context) : IRootService.Stub() {
 
     private val running = AtomicBoolean(false)
 
+    init {
+        try { LogSaver.init(context.applicationContext ?: context) } catch (_: Throwable) {}
+        LogSaver.i("RootService started pid=${android.os.Process.myPid()} uid=${android.os.Process.myUid()}")
+    }
+
     companion object {
         private const val WORK_DIR = "/data/local/tmp/samtimer"
         // The exploit hardcodes the bind-mount source to WORK_DIR/ksud, and
@@ -75,6 +80,7 @@ class RootService(private val context: Context) : IRootService.Stub() {
     }
 
     private fun log(callback: IRootCallback, line: String) {
+        LogSaver.i(line)
         runCatching { callback.onLog(line) }
     }
 
@@ -118,6 +124,43 @@ class RootService(private val context: Context) : IRootService.Stub() {
             }
         } catch (e: IOException) {
             log(callback, "warn: ksud staging failed (${e.message}); KSU load will fail")
+        }
+
+        // 1b. Stage KernelSU LKM(s) for ksud builds that require an external
+        // module file at runtime (e.g. android16-6.12).  Place copies in the
+        // workdir using both the KMI-specific and generic names ksud may look up.
+        val ksuAssetDir = "ksu"
+        val ksuKoNames = listOf(
+            "android16-6.12_kernelsu.ko",
+            "kernelsu.ko"
+        )
+        try {
+            val assets = context.assets.list(ksuAssetDir)?.toList().orEmpty()
+            val stagedKo = mutableListOf<String>()
+            for (name in assets) {
+                if (!name.endsWith(".ko")) continue
+                val targetNames = linkedSetOf(name)
+                if (name != "kernelsu.ko") targetNames.add("kernelsu.ko")
+                // Ensure the expected android16-6.12 name is present if shipped.
+                if (name.contains("android16-6.12")) targetNames.add("android16-6.12_kernelsu.ko")
+                for (target in targetNames) {
+                    val out = File(workDir, target)
+                    context.assets.open("$ksuAssetDir/$name").use { input ->
+                        out.outputStream().use { output -> input.copyTo(output) }
+                    }
+                    stagedKo.add("${out.name}:${out.length()}")
+                }
+            }
+            // If not bundled as an asset, fall back to a native lib copy renamed by ksud? (none expected)
+            if (stagedKo.isNotEmpty()) {
+                log(callback, "staged KernelSU module(s): ${stagedKo.distinct().joinToString(", ")}")
+            } else if (ksuKoNames.any { File(workDir, it).isFile }) {
+                log(callback, "KernelSU module(s) already present in $WORK_DIR")
+            } else {
+                log(callback, "note: no bundled KernelSU .ko asset found; ksud must load an embedded/module-resolved KMI build")
+            }
+        } catch (e: Exception) {
+            log(callback, "warn: KernelSU module staging failed (${e.message})")
         }
 
         // 1c. UMH helper: the same payload binary under the path the fake

@@ -53,27 +53,54 @@ val buildPayload by tasks.registering(Exec::class) {
             ?: throw GradleException(
                 "NDK not found — set ANDROID_NDK_HOME or ndk.dir in local.properties"
             )
-        val cc = "$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android34-clang"
-        if (!file(cc).exists()) throw GradleException("clang not found: $cc")
+        val hostOs = System.getProperty("os.name").lowercase()
+        val hostArch = System.getProperty("os.arch").lowercase()
+        val prebuilt = when {
+            hostOs.contains("linux") && (hostArch == "aarch64" || hostArch == "arm64") -> "linux-aarch64"
+            hostOs.contains("linux") -> "linux-x86_64"
+            hostOs.contains("mac") -> "darwin-x86_64"
+            else -> "linux-x86_64"
+        }
+        val ndkClang = "$ndk/toolchains/llvm/prebuilt/$prebuilt/bin/aarch64-linux-android34-clang"
+        val sysroot = "$ndk/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
         out.parentFile.mkdirs()
         logger.lifecycle("payload: $src -> $out")
-        commandLine(
-            cc,
-            "-O2", "-std=gnu11", "-static",
-            "-ffunction-sections", "-fdata-sections",
-            src.absolutePath, "-o", out.absolutePath
-        )
+        if (file(ndkClang).exists() && file(ndkClang).canExecute()) {
+            commandLine(
+                ndkClang,
+                "-O2", "-std=gnu11", "-static",
+                "-ffunction-sections", "-fdata-sections",
+                src.absolutePath, "-o", out.absolutePath
+            )
+        } else {
+            val fallbackClang = listOf(
+                "/usr/bin/clang",
+                "${System.getenv("PREFIX") ?: ""}/bin/clang",
+                "clang"
+            ).firstOrNull { it == "clang" || file(it).exists() } ?: "clang"
+            if (!file(sysroot).exists()) {
+                throw GradleException("NDK sysroot not found: $sysroot")
+            }
+            commandLine(
+                fallbackClang,
+                "--target=aarch64-linux-android34",
+                "--sysroot=$sysroot",
+                "-O2", "-std=gnu11", "-static",
+                "-ffunction-sections", "-fdata-sections",
+                src.absolutePath, "-o", out.absolutePath
+            )
+        }
     }
 }
 
 android {
     namespace = "com.roottimer.app"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.roottimer.app"
         minSdk = 31
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 2
         versionName = "1.1"
     }

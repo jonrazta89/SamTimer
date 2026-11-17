@@ -60,12 +60,21 @@ class ShizukuWaitWorker(ctx: Context, params: WorkerParameters) :
     Worker(ctx, params) {
 
     override fun doWork(): Result {
-        if (modulesHasKsu()) return Result.success() // already rooted, next worker no-ops
+        LogSaver.init(applicationContext)
+        LogSaver.i("ShizukuWaitWorker started")
+        if (modulesHasKsu()) {
+            LogSaver.i("ShizukuWaitWorker: kernelsu already loaded")
+            return Result.success() // already rooted, next worker no-ops
+        }
         val deadline = System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(8)
         while (System.currentTimeMillis() < deadline) {
-            if (Shizuku.pingBinder()) return Result.success()
+            if (Shizuku.pingBinder()) {
+                LogSaver.i("ShizukuWaitWorker: binder ready")
+                return Result.success()
+            }
             Thread.sleep(10_000)
         }
+        LogSaver.w("ShizukuWaitWorker: timed out waiting for Shizuku")
         AutoRootNotif.post(
             applicationContext, 1,
             applicationContext.getString(R.string.notif_skip),
@@ -86,13 +95,18 @@ class AutoRootWorker(ctx: Context, params: WorkerParameters) :
     }
 
     private fun fail(title: String, text: String): Result {
+        LogSaver.e("AutoRootWorker failure: $title | $text")
+        LogSaver.flushSync(1000)
         AutoRootNotif.post(applicationContext, 1, title, text)
         disableAutoRoot()
         return Result.failure()
     }
 
     override fun doWork(): Result {
+        LogSaver.init(applicationContext)
+        LogSaver.i("AutoRootWorker started")
         if (modulesHasKsu()) {
+            LogSaver.i("AutoRootWorker: already rooted")
             AutoRootNotif.post(
                 applicationContext, 1,
                 applicationContext.getString(R.string.notif_already),
@@ -103,6 +117,7 @@ class AutoRootWorker(ctx: Context, params: WorkerParameters) :
         if (Shizuku.getVersion() < 11 ||
             Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED
         ) {
+            LogSaver.w("AutoRootWorker: no Shizuku permission/version")
             return fail(
                 applicationContext.getString(R.string.notif_fail),
                 applicationContext.getString(R.string.notif_no_perm)
@@ -177,6 +192,8 @@ class AutoRootWorker(ctx: Context, params: WorkerParameters) :
 
         val (code, loaded) = outcome ?: (-1 to false)
         return if (loaded) {
+            LogSaver.i("AutoRootWorker: success (ksuLoaded=$loaded, code=$code)")
+            LogSaver.flushSync(1000)
             AutoRootNotif.post(
                 applicationContext, 1,
                 applicationContext.getString(R.string.notif_success),
